@@ -4,38 +4,9 @@ using BanglaCompiler.Lexer;
 
 namespace BanglaCompiler.Parser;
 
-/// <summary>
-/// Hand-written Recursive Descent Parser for Sohoj.
-///
-/// Compiler theory note: a recursive descent parser implements a grammar
-/// with one method per non-terminal — literally "recursive" because rules
-/// like &lt;expression&gt; refer to &lt;term&gt; which refers back to
-/// &lt;expression&gt; (via parenthesized sub-expressions), and the C# call
-/// stack mirrors that recursion directly. It's the most direct, most
-/// teachable way to turn a grammar into working code, which is exactly why
-/// it's the right choice for a compiler-construction course project: every
-/// method below can be read side-by-side with the matching rule in
-/// docs/grammar.md.
-///
-/// Operator precedence (docs/grammar.md) is implemented structurally, not
-/// with precedence numbers or tables: ParseExpression calls ParseTerm which
-/// calls ParseFactor, so "*" and "/" are always parsed one level deeper
-/// (tighter-binding) than "+" and "-" simply because of which method calls
-/// which. This is the standard "precedence climbing via grammar layering"
-/// technique.
-///
-/// PART 6 UPDATE: syntax errors are now reported through the shared
-/// <see cref="ErrorReporter"/> instead of the Parser's own ParseError/
-/// ParseResult types used in Part 4. Parse() now returns a ProgramNode
-/// directly; callers check errorReporter.HasErrors to decide whether to
-/// proceed to semantic analysis / code generation. The panic-mode recovery
-/// behavior (Synchronize) is unchanged from Part 4.
-/// </summary>
+
 public sealed class Parser
 {
-    /// <summary>Internal control-flow exception used to unwind out of a broken statement/expression
-    /// so the enclosing statement-list loop can record the error and resynchronize. This never
-    /// escapes the Parser class — Parse() always returns a ProgramNode, never throws.</summary>
     private sealed class ParseException : Exception
     {
         public int Line { get; }
@@ -64,9 +35,6 @@ public sealed class Parser
         _errorReporter = errorReporter;
     }
 
-    /// <summary>Parses the full token stream produced by the Lexer into a ProgramNode. Syntax
-    /// errors are reported into the ErrorReporter passed to the constructor; parsing never throws
-    /// out of this method — it always returns the best ProgramNode it could recover.</summary>
     public ProgramNode Parse()
     {
         var statements = new List<StatementNode>();
@@ -87,10 +55,9 @@ public sealed class Parser
         return new ProgramNode(statements);
     }
 
-    // -----------------------------------------------------------------
     // <statement> ::= <declaration> | <assignment> | <if-statement>
     //               | <while-statement> | <print-statement>
-    // -----------------------------------------------------------------
+
     private StatementNode ParseStatement()
     {
         return Current.Type switch
@@ -110,7 +77,7 @@ public sealed class Parser
     // <declaration> ::= <type> <identifier> "=" <expression> ";"
     private StatementNode ParseDeclaration()
     {
-        Token typeToken = Advance(); // KeywordSongkha or KeywordVognangsho, guaranteed by ParseStatement's dispatch
+        Token typeToken = Advance(); 
         Token nameToken = Expect(TokenType.Identifier, "Expected a variable name after the type.");
         Expect(TokenType.Assign, "Expected '=' after the variable name in a declaration.");
         ExpressionNode initializer = ParseExpression();
@@ -122,7 +89,7 @@ public sealed class Parser
     // <assignment> ::= <identifier> "=" <expression> ";"
     private StatementNode ParseAssignment()
     {
-        Token nameToken = Advance(); // Identifier, guaranteed by ParseStatement's dispatch
+        Token nameToken = Advance();
         Expect(TokenType.Assign, "Expected '=' after identifier in assignment.");
         ExpressionNode value = ParseExpression();
         Expect(TokenType.Semicolon, "Expected ';' after assignment.");
@@ -288,51 +255,8 @@ public sealed class Parser
             Current.Line, Current.Column);
     }
 
-    // -----------------------------------------------------------------
     // Panic-mode error recovery
-    // -----------------------------------------------------------------
 
-    /// <summary>
-    /// Compiler theory note: "panic mode" recovery discards tokens after a
-    /// syntax error until it finds a position it's confident is a safe
-    /// place to resume parsing — here, either just after a semicolon (the
-    /// end of whatever statement was broken) or at a token that clearly
-    /// starts a new statement (a keyword). This is what satisfies "error
-    /// recovery should skip to semicolon or end of line where appropriate":
-    /// we skip to the nearest statement boundary rather than aborting the
-    /// whole compilation on the first mistake.
-    ///
-    /// Two correctness properties matter a lot more here than they might
-    /// first appear, and both are covered by tests in Part 9:
-    ///
-    /// 1. NEVER discard a token that's already a safe resync point. A very
-    ///    common failure case is a missing semicolon, e.g. "সংখ্যা x = 10"
-    ///    followed immediately by "সংখ্যা y = 20;" — the error is raised
-    ///    with Current already sitting on the KeywordSongkha that starts
-    ///    the next, perfectly valid declaration. So every stop condition
-    ///    below is checked BEFORE consuming anything.
-    ///
-    /// 2. ALWAYS make forward progress, or return only via a check against
-    ///    the CURRENT token — never resume based on stale state (like "the
-    ///    previously consumed token happened to be a semicolon", which may
-    ///    have belonged to a completely unrelated, already-finished
-    ///    statement). An earlier draft of this method checked
-    ///    Previous().Type == Semicolon on entry, which could be stale in
-    ///    exactly this way — for a stray/unmatched '}' encountered outside
-    ///    any block, it caused Synchronize to return immediately, forever,
-    ///    without ever consuming the offending brace, hanging the compiler
-    ///    in an infinite loop. The loop below instead only recognizes a
-    ///    semicolon-boundary immediately AFTER consuming it in THIS call,
-    ///    guaranteeing every iteration either returns from checking Current
-    ///    (no state risk) or performs an Advance() (guaranteed progress).
-    ///
-    /// <paramref name="insideBlock"/> distinguishes the two places this is
-    /// called from: inside ParseBlock, a '}' is this block's own closing
-    /// brace and should be left for ParseBlock's Expect(RightBrace) to
-    /// consume; at the top level (Parse()), there is no enclosing block to
-    /// consume a '}', so a stray one there must be treated as garbage and
-    /// skipped instead — otherwise it can never be resolved.
-    /// </summary>
     private void Synchronize(bool insideBlock)
     {
         while (!IsAtEnd())
@@ -349,20 +273,18 @@ public sealed class Parser
 
             if (insideBlock && Current.Type == TokenType.RightBrace)
             {
-                return; // this block's closing brace — leave it for ParseBlock to consume
+                return; 
             }
 
-            Token consumed = Advance(); // not yet at a safe point — discard and keep looking; guarantees progress
+            Token consumed = Advance(); 
             if (consumed.Type == TokenType.Semicolon)
             {
-                return; // just consumed a statement-ending semicolon — safe to resume right after it
+                return; 
             }
         }
     }
 
-    // -----------------------------------------------------------------
     // Token stream helpers
-    // -----------------------------------------------------------------
 
     private Token Current => _tokens[_pos];
 
@@ -381,9 +303,6 @@ public sealed class Parser
         return Previous();
     }
 
-    /// <summary>Consumes the current token if it matches <paramref name="type"/>, otherwise
-    /// throws a ParseException with the given message — this is how every grammar rule
-    /// enforces required tokens (closing parens, semicolons, etc.).</summary>
     private Token Expect(TokenType type, string message)
     {
         if (Check(type))
