@@ -54,6 +54,8 @@ public sealed class SemanticAnalyzer
         }
     }
 
+
+
     private void AnalyzeDeclaration(DeclarationNode decl)
     {
         DataType declaredType = DataTypeExtensions.FromKeyword(decl.DeclaredType);
@@ -79,11 +81,12 @@ public sealed class SemanticAnalyzer
             _errorReporter.ReportSemantic(
                 $"Undefined variable '{assign.Identifier}'. Variables must be declared with সংখ্যা or ভগ্নাংশ before use.",
                 assign.Line, assign.Column, assign.Identifier);
-            return; // nothing further to type-check without a known target type
+            return; 
         }
 
         CheckAssignmentCompatibility(symbol!.Type, valueType, assign.Identifier, assign.Line, assign.Column);
     }
+
 
     private void AnalyzeIf(IfNode ifNode)
     {
@@ -152,6 +155,7 @@ public sealed class SemanticAnalyzer
                 throw new InvalidOperationException($"Unhandled expression node type: {expression.GetType().Name}");
         }
     }
+
 
 
     private DataType InferBinaryType(BinaryExpressionNode binary)
